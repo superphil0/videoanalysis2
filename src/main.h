@@ -6,5 +6,4 @@
 
 #define DEBUG 1
 
-#define NTRAINING_SAMPLES   100
 #define FRAC_LINEAR_SEP     0.9f
