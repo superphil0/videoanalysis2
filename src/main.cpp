@@ -60,12 +60,17 @@ struct Classifier {
 /************* SAVE / LOAD ***************/
 /*****************************************/
 
-bool persistClassifier(const Classifier& c, const string& path, const string& filename) {
-    return false;
+bool persistClassifier(const Classifier& c, const string& filepath) {
+    string p = filepath + PATH_SEPARATOR + "svm.xml";
+    c.svm->save(p.c_str());
+    return true;
 }
 
-Classifier loadClassifier(const string& path, const string& filename) {
+Classifier loadClassifier(const string& path, const string& filepath) {
     Classifier c;
+    c.svm = unique_ptr<CvSVM>(new CvSVM());
+    string p = filepath + PATH_SEPARATOR + "svm.xml";
+    c.svm->load(p.c_str());
     return c;
 }
 
@@ -115,7 +120,7 @@ Classifier train(const Mat& data, const Mat& labels)
     cout << "Starting training process" << endl;
     c.svm->train(data, labels, Mat(), Mat(), params);
     cout << "Finished training process" << endl;
-
+    
     return c;
 }
 
