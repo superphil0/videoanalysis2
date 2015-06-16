@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <math.h>
+#include <memory>
 #include <vector>
 
 #include <opencv2/core/core.hpp>
@@ -20,7 +21,7 @@ using namespace cv;
 /*********** GLOBAL VARIABLES ************/
 /*****************************************/
 
-int DIC_SIZE = 500;
+int DIC_SIZE = 1000;
 static const string INTERACTION_TYPES[4] = {"Kiss", "HandShake", "HighFive", "Hug"};
 
 Ptr<FeatureDetector> siftDetector = FeatureDetector::create("SIFT");
