@@ -6,6 +6,8 @@
 #include <iostream>
 #include <math.h>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 #include <opencv2/core/core.hpp>
@@ -13,6 +15,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/ml/ml.hpp>
+#include <opencv2/nonfree/nonfree.hpp>
 #include <opencv2/video/background_segm.hpp>
 
 using namespace std;
@@ -124,7 +127,7 @@ void processVideo(const string& filepath, const function<void (const Mat&)>& f)
     
     int framecounter = 0;
     int fps = video.get(CV_CAP_PROP_FPS);
-    for(int i = 0 ; i < 50*fps ; i = i+(fps*0.5))
+    for(int i = 0 ; i < 5*fps ; i = i+(fps*0.25))
     {
         video.set(CV_CAP_PROP_POS_FRAMES, i);
         video >> frame;
@@ -187,30 +190,42 @@ int classify(const string& filepath)
     return maxLabel;
 }
 
+mutex training_mutex;
+
+void collectTrainData(const string& path, int i, int numLeaveOut, Mat* trainingData, Mat* trainingLabels)
+{
+    for (int j = 0; j < 45-numLeaveOut; j++)
+    {
+        string filepath = createPath(path, i, j);
+        
+        function<void (const Mat&)> f = [&i, &trainingData, &trainingLabels](const Mat& frame) {
+            vector<KeyPoint> keypoints;
+            siftDetector->detect(frame, keypoints);
+            Mat bowDescriptor;
+            bowDE.compute(frame, keypoints, bowDescriptor);
+            
+            if (!bowDescriptor.empty()) {
+                training_mutex.lock();
+                trainingLabels->push_back((float)i);
+                trainingData->push_back(bowDescriptor);
+                training_mutex.unlock();
+            }
+        };
+        processVideo(filepath, f);
+    }
+}
 
 float performCrossValidation(string path, int numLeaveOut)
 {
     Mat trainingData(0, DIC_SIZE, CV_32FC1);
     Mat trainingLabels(0, 1, CV_32FC1);
 
+    vector<thread> ts;
     for (int i = 0; i < 4; i++)
-        for (int j = 0; j < 45-numLeaveOut; j++)
-        {
-            string filepath = createPath(path, i, j);
-            
-            function<void (const Mat&)> f = [&i, &trainingData, &trainingLabels](const Mat& frame) {
-                vector<KeyPoint> keypoints;
-                siftDetector->detect(frame, keypoints);
-                Mat bowDescriptor;
-                bowDE.compute(frame, keypoints, bowDescriptor);
-                
-                if (!bowDescriptor.empty()) {
-                    trainingLabels.push_back((float)i);
-                    trainingData.push_back(bowDescriptor);
-                }
-            };
-            processVideo(filepath, f);
-        }
+        ts.push_back(thread(collectTrainData, path, i, numLeaveOut, &trainingData, &trainingLabels));
+    
+    for (auto &t : ts)
+        t.join();
     
     train(trainingData, trainingLabels);
     
@@ -249,7 +264,7 @@ void collectCentroidsForVideo(string filepath)
 void collectCentroids(string path)
 {
     for (int i = 0; i < 4; i++)
-        for (int j = 0; j < 4; j++)
+        for (int j = 0; j < 3; j++)
         {
             string filepath = createPath(path, i, j);
             collectCentroidsForVideo(filepath);
@@ -257,12 +272,18 @@ void collectCentroids(string path)
     
     vector<Mat> descriptors = bowTrainer.getDescriptors();
     
+    cout << "Start clustering ..." << endl;
     Mat dictionary = bowTrainer.cluster();
+    cout << "Finished clustering ..." << endl;
     bowDE.setVocabulary(dictionary);
 }
 
 int main(int argc, char** argv)
 {
+    cv::initModule_nonfree();
+    cv::initModule_features2d();
+    cv::initModule_ml();
+    
     collectCentroids(argv[1]);
     performCrossValidation(argv[1], 5);
 
