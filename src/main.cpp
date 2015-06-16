@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <opencv2/core/core.hpp>
+#include <opencv2/features2d/features2d.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/ml/ml.hpp>
@@ -78,6 +79,26 @@ Classifier loadClassifier(const string& path, const string& filepath) {
 /***************** CORE ******************/
 /*****************************************/
 
+void extractFeatureFromFrame(const Mat& frame)
+{
+    Ptr<FeatureDetector> fd = FeatureDetector::create("SIFT");
+    vector<KeyPoint> keypoints;
+    fd->detect(frame, keypoints);
+    
+    Ptr<DescriptorExtractor> fe = DescriptorExtractor::create("SIFT");
+    Mat descriptors;
+    fe->compute(frame, keypoints, descriptors);
+    
+    Mat test;
+    Scalar keypointColor = Scalar(255,0,0);
+    drawKeypoints(frame, keypoints, test, keypointColor, DrawMatchesFlags::DEFAULT);
+    
+    cout << descriptors << endl;
+    
+    imshow("TEST", test);
+    waitKey();
+}
+
 Mat extractFeaturesFromVideo(string filepath, int label)
 {
     cout << "Extracting features from: " << filepath << endl;
@@ -97,11 +118,13 @@ Mat extractFeaturesFromVideo(string filepath, int label)
         throw "Empty video?!";
     }
     resize(frame, frame, targetSize);
-    frame.convertTo(frame, CV_32FC3);
-
+    cvtColor(frame, frame, CV_BGR2GRAY);
+    
+    extractFeatureFromFrame(frame);
+    
     Mat f = Mat::zeros(2, 1, CV_32FC1);
-    f.at<float>(0) = (float) (label%2);
-    f.at<float>(1) = (float) (label/2);
+    f.at<float>(0) = sum(frame)[0] / 320 / 240;
+    f.at<float>(1) = (float) video.get(CV_CAP_PROP_FRAME_COUNT);
     
 	return f;
 }
@@ -117,9 +140,7 @@ Classifier train(const Mat& data, const Mat& labels)
     Classifier c;
     c.svm = unique_ptr<CvSVM>(new CvSVM());
 
-    cout << "Starting training process" << endl;
     c.svm->train(data, labels, Mat(), Mat(), params);
-    cout << "Finished training process" << endl;
     
     return c;
 }
@@ -186,7 +207,7 @@ float performCrossValidation(string path, int numLeaveOut)
 
 int main(int argc, char** argv)
 {
-    performCrossValidation(argv[1], 40);
+    performCrossValidation(argv[1], 5);
 
 	return -1;
 }
