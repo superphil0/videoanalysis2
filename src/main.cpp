@@ -17,6 +17,19 @@ using namespace std;
 using namespace cv;
 
 /*****************************************/
+/*********** GLOBAL VARIABLES ************/
+/*****************************************/
+
+int DIC_SIZE = 500;
+static const string INTERACTION_TYPES[4] = {"Kiss", "HandShake", "HighFive", "Hug"};
+
+Ptr<FeatureDetector> siftDetector = FeatureDetector::create("SIFT");
+Ptr<DescriptorExtractor> siftExtractor = DescriptorExtractor::create("SIFT");
+Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("FlannBased");
+BOWKMeansTrainer bowTrainer(DIC_SIZE, TermCriteria(CV_TERMCRIT_ITER, 100, 0.001), 1, KMEANS_PP_CENTERS);
+BOWImgDescriptorExtractor bowDE(siftExtractor, matcher);
+
+/*****************************************/
 /*************** UTILITIES ***************/
 /*****************************************/
 
@@ -49,6 +62,19 @@ void printMat(cv::Mat mat)
 	printf("Matrix: %s %dx%d \n", ty.c_str(), mat.cols, mat.rows);
 }
 
+string createPath(const string& path, int type, int num)
+{
+    string dirname = to_string(type+1) + "_" + INTERACTION_TYPES[type];
+
+    stringstream ss;
+    ss << setw(3) << setfill('0') << num+1;
+    string numstr = ss.str();
+    string filename = INTERACTION_TYPES[type] + "_" + numstr + ".avi";
+    string filepath = path + PATH_SEPARATOR + dirname + PATH_SEPARATOR + filename;
+    
+    return filepath;
+}
+
 /*****************************************/
 /************ DATA STRUCTURES ************/
 /*****************************************/
@@ -76,66 +102,53 @@ Classifier loadClassifier(const string& path, const string& filepath) {
 }
 
 /*****************************************/
-/***************** CORE ******************/
+/************** PROCESSING ***************/
 /*****************************************/
 
-void extractFeatureFromFrame(const Mat& frame)
+void processVideo(const string& filepath, const function<void (const Mat&)>& f)
 {
-    Ptr<FeatureDetector> fd = FeatureDetector::create("SIFT");
-    vector<KeyPoint> keypoints;
-    fd->detect(frame, keypoints);
-    
-    Ptr<DescriptorExtractor> fe = DescriptorExtractor::create("SIFT");
-    Mat descriptors;
-    fe->compute(frame, keypoints, descriptors);
-    
-    Mat test;
-    Scalar keypointColor = Scalar(255,0,0);
-    drawKeypoints(frame, keypoints, test, keypointColor, DrawMatchesFlags::DEFAULT);
-    
-    cout << descriptors << endl;
-    
-    imshow("TEST", test);
-    waitKey();
-}
-
-Mat extractFeaturesFromVideo(string filepath, int label)
-{
-    cout << "Extracting features from: " << filepath << endl;
+    cout << "Processing " << filepath << endl;
 
     Size targetSize(320,240);
-
     VideoCapture video;
     video.open(filepath);
-    
     if (!video.isOpened()) {
         throw "Video not opened!";
     }
     
     Mat frame;
-    video >> frame;
-    if (frame.empty()) {
-        throw "Empty video?!";
+    Mat features;
+    
+    int framecounter = 0;
+    int fps = video.get(CV_CAP_PROP_FPS);
+    for(int i = 0 ; i < 50*fps ; i = i+(fps*0.5))
+    {
+        video.set(CV_CAP_PROP_POS_FRAMES, i);
+        video >> frame;
+        if (frame.empty()) {
+            break;
+        }
+        resize(frame, frame, targetSize);
+        cvtColor(frame, frame, CV_BGR2GRAY);
+        
+        f(frame);
+        framecounter++;
     }
-    resize(frame, frame, targetSize);
-    cvtColor(frame, frame, CV_BGR2GRAY);
-    
-    extractFeatureFromFrame(frame);
-    
-    Mat f = Mat::zeros(2, 1, CV_32FC1);
-    f.at<float>(0) = sum(frame)[0] / 320 / 240;
-    f.at<float>(1) = (float) video.get(CV_CAP_PROP_FRAME_COUNT);
-    
-	return f;
+    //cout << framecounter << endl;
 }
+
+/*****************************************/
+/***************** CORE ******************/
+/*****************************************/
 
 Classifier train(const Mat& data, const Mat& labels)
 {
     CvSVMParams params;
     params.svm_type    = SVM::C_SVC;
-    params.C           = 0.1;
+    params.C           = 312.5;
     params.kernel_type = SVM::RBF;
-    params.term_crit   = TermCriteria(CV_TERMCRIT_ITER, (int)1e7, 1e-6);
+    params.gamma       = 0.50625;
+    params.term_crit   = TermCriteria(CV_TERMCRIT_ITER, 100, 0.000001);
 
     Classifier c;
     c.svm = unique_ptr<CvSVM>(new CvSVM());
@@ -145,68 +158,114 @@ Classifier train(const Mat& data, const Mat& labels)
     return c;
 }
 
-int classify(const Classifier& c, const Mat& f)
+int classify(const Classifier& c, const string& filepath)
 {
-    float l = c.svm->predict(f);
-    cout << "Predicting " << l << endl;
-    return l;
+    map<int, int> classVoting;
+    
+    function<void (const Mat&)> f = [&c, &classVoting](const Mat& frame)
+    {
+        vector<KeyPoint> keypoints;
+        siftDetector->detect(frame, keypoints);
+        Mat bowDescriptor;
+        bowDE.compute(frame, keypoints, bowDescriptor);
+        
+        if (!bowDescriptor.empty())
+        {
+            float l = c.svm->predict(bowDescriptor);
+            classVoting[(int)l]++;
+        }
+    };
+    processVideo(filepath, f);
+    
+    int maxValue = 0;
+    int maxLabel = 0;
+    for (auto it = classVoting.begin(); it != classVoting.end(); it++) {
+        if (it->second > maxValue) {
+            maxLabel = it->first;
+            maxValue = it->second;
+        }
+        cout << "Label " << it->first << " has " << maxValue << " votes." << endl;
+    }
+    return maxLabel;
 }
 
-static const string INTERACTION_TYPES[4] = {"Kiss", "HandShake", "HighFive", "Hug"};
 
 float performCrossValidation(string path, int numLeaveOut)
 {
-    Mat trainingData = Mat::zeros((45-numLeaveOut) * 4, 2, CV_32FC1);
-    Mat trainingLabels = Mat::zeros((45-numLeaveOut) * 4, 1, CV_32FC1);
+    Mat trainingData(0, DIC_SIZE, CV_32FC1);
+    Mat trainingLabels(0, 1, CV_32FC1);
 
     for (int i = 0; i < 4; i++)
-    {
-        string dirname = to_string(i+1) + "_" + INTERACTION_TYPES[i];
-        
-        for (int j = 0; j < 45-numLeaveOut; j++) {
-            stringstream ss;
-            ss << setw(3) << setfill('0') << j+1;
-            string numstr = ss.str();
-            string filename = INTERACTION_TYPES[i] + "_" + numstr + ".avi";
-            string filepath = path + PATH_SEPARATOR + dirname + PATH_SEPARATOR + filename;
+        for (int j = 0; j < 45-numLeaveOut; j++)
+        {
+            string filepath = createPath(path, i, j);
             
-            Mat f = extractFeaturesFromVideo(filepath, i);
-            trainingData.at<float>(i*(45-numLeaveOut)+j, 0) = f.at<float>(0);
-            trainingData.at<float>(i*(45-numLeaveOut)+j, 1) = f.at<float>(1);
-            trainingLabels.at<float>(i*(45-numLeaveOut)+j) = (float)i;
+            function<void (const Mat&)> f = [&i, &trainingData, &trainingLabels](const Mat& frame) {
+                vector<KeyPoint> keypoints;
+                siftDetector->detect(frame, keypoints);
+                Mat bowDescriptor;
+                bowDE.compute(frame, keypoints, bowDescriptor);
+                
+                if (!bowDescriptor.empty()) {
+                    trainingLabels.push_back((float)i);
+                    trainingData.push_back(bowDescriptor);
+                }
+            };
+            processVideo(filepath, f);
         }
-    }
     
-    cout << trainingData << endl;
     Classifier c = train(trainingData, trainingLabels);
     
     int correct_guesses = 0;
     
     for (int i = 0; i < 4; i++)
-    {
-        string dirname = to_string(i+1) + "_" + INTERACTION_TYPES[i];
-        
-        for (int j = 45-numLeaveOut; j < 45; j++) {
-            stringstream ss;
-            ss << setw(3) << setfill('0') << j+1;
-            string numstr = ss.str();
-            string filename = INTERACTION_TYPES[i] + "_" + numstr + ".avi";
-            string filepath = path + PATH_SEPARATOR + dirname + PATH_SEPARATOR + filename;
+        for (int j = 45-numLeaveOut; j < 45; j++)
+        {
+            string filepath = createPath(path, i, j);
             
-            Mat f = extractFeaturesFromVideo(filepath, i);
-            int l = classify(c, f);
+            int l = classify(c, filepath);
             if (l == i) {
                 correct_guesses++;
             }
         }
-    }
     cout << "Precision: " << (float)correct_guesses/numLeaveOut/4 << endl;
     
     return -1;
 }
 
+void collectCentroidsForVideo(string filepath)
+{
+    function<void (const Mat&)> f = [](const Mat& frame)
+    {
+        vector<KeyPoint> keypoints;
+        siftDetector->detect(frame, keypoints);
+        Mat descriptors;
+        siftExtractor->compute(frame, keypoints, descriptors);
+        if (!descriptors.empty()) {
+            bowTrainer.add(descriptors);
+        }
+    };
+    processVideo(filepath, f);
+}
+
+void collectCentroids(string path)
+{
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+        {
+            string filepath = createPath(path, i, j);
+            collectCentroidsForVideo(filepath);
+        }
+    
+    vector<Mat> descriptors = bowTrainer.getDescriptors();
+    
+    Mat dictionary = bowTrainer.cluster();
+    bowDE.setVocabulary(dictionary);
+}
+
 int main(int argc, char** argv)
 {
+    collectCentroids(argv[1]);
     performCrossValidation(argv[1], 5);
 
 	return -1;

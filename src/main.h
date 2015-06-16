@@ -5,5 +5,3 @@
 #endif
 
 #define DEBUG 1
-
-#define FRAC_LINEAR_SEP     0.9f
