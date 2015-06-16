@@ -186,10 +186,8 @@ float performCrossValidation(string path, int numLeaveOut)
 
 int main(int argc, char** argv)
 {
-    performCrossValidation("/Users/markomlinaric/Desktop/training", 40);
+    performCrossValidation(argv[1], 40);
 
-    // Suggested usage:
-    // videoanalysis [path/to/test/dir] [-train path/to/training/dir]
 	return -1;
 }
 
