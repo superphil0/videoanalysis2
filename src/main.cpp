@@ -1,6 +1,7 @@
 #include "main.h"
 
 #include <cstdint>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <math.h>
@@ -29,6 +30,7 @@ Ptr<DescriptorExtractor> siftExtractor = DescriptorExtractor::create("SIFT");
 Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("FlannBased");
 BOWKMeansTrainer bowTrainer(DIC_SIZE, TermCriteria(CV_TERMCRIT_ITER, 100, 0.001), 1, KMEANS_PP_CENTERS);
 BOWImgDescriptorExtractor bowDE(siftExtractor, matcher);
+CvSVM svm;
 
 /*****************************************/
 /*************** UTILITIES ***************/
@@ -80,27 +82,27 @@ string createPath(const string& path, int type, int num)
 /************ DATA STRUCTURES ************/
 /*****************************************/
 
-struct Classifier {
-    unique_ptr<CvSVM> svm;
-};
+//struct Classifier {
+//    unique_ptr<CvSVM> svm;
+//};
 
 /*****************************************/
 /************* SAVE / LOAD ***************/
 /*****************************************/
 
-bool persistClassifier(const Classifier& c, const string& filepath) {
-    string p = filepath + PATH_SEPARATOR + "svm.xml";
-    c.svm->save(p.c_str());
-    return true;
-}
-
-Classifier loadClassifier(const string& path, const string& filepath) {
-    Classifier c;
-    c.svm = unique_ptr<CvSVM>(new CvSVM());
-    string p = filepath + PATH_SEPARATOR + "svm.xml";
-    c.svm->load(p.c_str());
-    return c;
-}
+//bool persistClassifier(const Classifier& c, const string& filepath) {
+//    string p = filepath + PATH_SEPARATOR + "svm.xml";
+//    c.svm->save(p.c_str());
+//    return true;
+//}
+//
+//Classifier loadClassifier(const string& path, const string& filepath) {
+//    Classifier c;
+//    c.svm = unique_ptr<CvSVM>(new CvSVM());
+//    string p = filepath + PATH_SEPARATOR + "svm.xml";
+//    c.svm->load(p.c_str());
+//    return c;
+//}
 
 /*****************************************/
 /************** PROCESSING ***************/
@@ -142,7 +144,7 @@ void processVideo(const string& filepath, const function<void (const Mat&)>& f)
 /***************** CORE ******************/
 /*****************************************/
 
-Classifier train(const Mat& data, const Mat& labels)
+void train(const Mat& data, const Mat& labels)
 {
     CvSVMParams params;
     params.svm_type    = SVM::C_SVC;
@@ -151,19 +153,14 @@ Classifier train(const Mat& data, const Mat& labels)
     params.gamma       = 0.50625;
     params.term_crit   = TermCriteria(CV_TERMCRIT_ITER, 100, 0.000001);
 
-    Classifier c;
-    c.svm = unique_ptr<CvSVM>(new CvSVM());
-
-    c.svm->train(data, labels, Mat(), Mat(), params);
-    
-    return c;
+    svm.train(data, labels, Mat(), Mat(), params);
 }
 
-int classify(const Classifier& c, const string& filepath)
+int classify(const string& filepath)
 {
     map<int, int> classVoting;
     
-    function<void (const Mat&)> f = [&c, &classVoting](const Mat& frame)
+    function<void (const Mat&)> f = [&classVoting](const Mat& frame)
     {
         vector<KeyPoint> keypoints;
         siftDetector->detect(frame, keypoints);
@@ -172,7 +169,7 @@ int classify(const Classifier& c, const string& filepath)
         
         if (!bowDescriptor.empty())
         {
-            float l = c.svm->predict(bowDescriptor);
+            float l = svm.predict(bowDescriptor);
             classVoting[(int)l]++;
         }
     };
@@ -215,7 +212,7 @@ float performCrossValidation(string path, int numLeaveOut)
             processVideo(filepath, f);
         }
     
-    Classifier c = train(trainingData, trainingLabels);
+    train(trainingData, trainingLabels);
     
     int correct_guesses = 0;
     
@@ -224,7 +221,7 @@ float performCrossValidation(string path, int numLeaveOut)
         {
             string filepath = createPath(path, i, j);
             
-            int l = classify(c, filepath);
+            int l = classify(filepath);
             if (l == i) {
                 correct_guesses++;
             }
