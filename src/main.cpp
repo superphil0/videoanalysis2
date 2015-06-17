@@ -126,12 +126,12 @@ void train(const Mat& data, const Mat& labels)
 {
 	CvSVMParams params;
 	params.svm_type = SVM::C_SVC;
-	//params.C = 312.5;
+	params.C = 1;
 	params.kernel_type = SVM::RBF;
-	//params.gamma = 0.50625;
+	params.gamma = 0.6;
 	params.term_crit = TermCriteria(CV_TERMCRIT_ITER, 100, 0.000001);
 
-	svm.train_auto(data, labels, Mat(), Mat(), params);
+	svm.train(data, labels, Mat(), Mat(), params);
 	svm.save(SVM_PATH);
 }
 
@@ -161,7 +161,7 @@ int classify(const string& filepath)
 			maxLabel = it->first;
 			maxValue = it->second;
 		}
-		cout << "Label " << it->first << " has " << maxValue << " votes." << endl;
+		cout << "Label " << (it->first + 1) << " has " << it->second << " votes." << endl;
 	}
 	return maxLabel;
 }
@@ -211,7 +211,7 @@ float performCrossValidation(string path)
     int correct_guesses = 0;
     
     for (int i = 0; i < 4; i++)
-        for (int j =  0 /*45-NUM_CROSS_VALID_LEAVE_OUT*/; j < 45; j++)
+        for (int j = 0; j < 45-NUM_CROSS_VALID_LEAVE_OUT; j++)
         {
             string filepath = createPath(path, i, j);
             
@@ -220,9 +220,22 @@ float performCrossValidation(string path)
                 correct_guesses++;
             }
         }
-    cout << "Precision: " << (float)correct_guesses/ /*NUM_CROSS_VALID_LEAVE_OUT*/ (float)45 / (float)4 << endl;
+    cout << "In-sample precision: " << (float)correct_guesses/ (float)(45 - NUM_CROSS_VALID_LEAVE_OUT) / (float)4 << endl;
     
-    return -1;
+    correct_guesses = 0;
+    for (int i = 0; i < 4; i++)
+        for (int j = 45-NUM_CROSS_VALID_LEAVE_OUT; j < 45; j++)
+        {
+            string filepath = createPath(path, i, j);
+            
+            int l = classify(filepath);
+            if (l == i) {
+                correct_guesses++;
+            }
+        }
+    cout << "Out-of-sample precision: " << (float)correct_guesses/ (float)NUM_CROSS_VALID_LEAVE_OUT / (float)4 << endl;
+    
+    return (float)correct_guesses/ (float)NUM_CROSS_VALID_LEAVE_OUT / (float)4;
 }
 
 void collectCentroidsForVideo(string filepath)
