@@ -268,8 +268,10 @@ void collectCentroids(string path)
     Mat dictionary = bowTrainer.cluster();
     cout << "Finished clustering ..." << endl;
     bowDE.setVocabulary(dictionary);
+    
 	cv::FileStorage file(DICT_PATH, cv::FileStorage::WRITE);
-	file << dictionary;
+	file << "vocabulary" << dictionary;
+    file.release();
 }
 
 String writeResult(string filename, int label)
@@ -309,7 +311,6 @@ int main(int argc, char** argv)
 	if (TRAIN_MODE)
 	{
 		collectCentroids(argv[1]);
-
 		performCrossValidation(argv[1]);
 	}
 	else{
