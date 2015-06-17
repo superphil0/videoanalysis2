@@ -186,7 +186,7 @@ int classify(const string& filepath)
             maxLabel = it->first;
             maxValue = it->second;
         }
-        cout << "Label " << it->first << " has " << maxValue << " votes." << endl;
+        cout << "Label " << it->first << " has " << it->second << " votes." << endl;
     }
     return maxLabel;
 }
