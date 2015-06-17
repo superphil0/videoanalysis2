@@ -19,9 +19,9 @@ const char* getTextForEnum(int enumVal)
 }
 
 
-int DIC_SIZE = 1000;
+int DIC_SIZE = 500;
 int NUM_CLUSTER_VIDEOS = 2;
-int NUM_CROSS_VALID_LEAVE_OUT = 0;
+int NUM_CROSS_VALID_LEAVE_OUT = 5;
 int FEATURE_FRAMES_PER_SECOND = 4;
 int FEATURE_MAX_FRAMES = 20;
 

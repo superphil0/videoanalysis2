@@ -161,7 +161,7 @@ int classify(const string& filepath)
 			maxLabel = it->first;
 			maxValue = it->second;
 		}
-		cout << "Label " << it->first << " has " << maxValue << " votes." << endl;
+		cout << "Label " << it->first << " has " << it->second << " votes." << endl;
 	}
 	return maxLabel;
 }
@@ -211,7 +211,7 @@ float performCrossValidation(string path)
     int correct_guesses = 0;
     
     for (int i = 0; i < 4; i++)
-        for (int j =  0 /*45-NUM_CROSS_VALID_LEAVE_OUT*/; j < 45; j++)
+        for (int j = 0; j < 45-NUM_CROSS_VALID_LEAVE_OUT; j++)
         {
             string filepath = createPath(path, i, j);
             
@@ -220,9 +220,21 @@ float performCrossValidation(string path)
                 correct_guesses++;
             }
         }
-    cout << "Precision: " << (float)correct_guesses/ /*NUM_CROSS_VALID_LEAVE_OUT*/ (float)45 / (float)4 << endl;
+    cout << "In-sample precision: " << (float)correct_guesses/ (float)(45 - NUM_CROSS_VALID_LEAVE_OUT) / (float)4 << endl;
     
-    return -1;
+    for (int i = 0; i < 4; i++)
+        for (int j = 45-NUM_CROSS_VALID_LEAVE_OUT; j < 45; j++)
+        {
+            string filepath = createPath(path, i, j);
+            
+            int l = classify(filepath);
+            if (l == i) {
+                correct_guesses++;
+            }
+        }
+    cout << "Out-of-sample precision: " << (float)correct_guesses/ (float)NUM_CROSS_VALID_LEAVE_OUT / (float)4 << endl;
+    
+    return (float)correct_guesses/ (float)NUM_CROSS_VALID_LEAVE_OUT / (float)4;
 }
 
 void collectCentroidsForVideo(string filepath)
