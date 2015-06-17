@@ -26,15 +26,13 @@ SIFT \cite{lowe2004distinctive} descriptors for the frame are found and stored.
 Next a k-means-clustering is performed with a $k$ of $500$, this is the size of our dictionary. 
 Next the BOW descriptors are extracted from each video frame. 
 These descriptors are then used to train a support vector machine (SVM) for the later classification.
-An overview over the pipeline can be seen in Table \ref{fig:grafik}.
+An overview over the used pipeline can be seen in Figure \ref{fig:grafik}.
 \begin{figure}[h]
 	\centering
-	\includegraphics[width = \textwidth]{grafik.png}
-	\caption{The processing pipeline of of our approach}
+	\includegraphics[width = \textwidth]{papergrafik.png}
+	\caption{The processing pipeline of \cite{tamrakar2012evaluation}}
 	\label{fig:grafik}
 \end{figure}
-\section{Training}	
-
 
 \section{Results}
 
