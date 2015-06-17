@@ -9,6 +9,8 @@
 #include <mutex>
 #include <thread>
 #include <vector>
+#include <fstream>
+#include <iostream>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
@@ -25,7 +27,6 @@ using namespace cv;
 /*********** GLOBAL VARIABLES ************/
 /*****************************************/
 
-Size TARGET_SIZE(320,240);
 
 Ptr<FeatureDetector> siftDetector = FeatureDetector::create("SIFT");
 Ptr<DescriptorExtractor> siftExtractor = DescriptorExtractor::create("SIFT");
@@ -69,15 +70,15 @@ void printMat(cv::Mat mat)
 
 string createPath(const string& path, int type, int num)
 {
-    string dirname = to_string(type+1) + "_" + INTERACTION_TYPES[type];
+	string dirname = to_string(type + 1) + "_" + getTextForEnum(type);
 
-    stringstream ss;
-    ss << setw(3) << setfill('0') << num+1;
-    string numstr = ss.str();
-    string filename = INTERACTION_TYPES[type] + "_" + numstr + ".avi";
-    string filepath = path + PATH_SEPARATOR + dirname + PATH_SEPARATOR + filename;
-    
-    return filepath;
+	stringstream ss;
+	ss << setw(3) << setfill('0') << num + 1;
+	string numstr = ss.str();
+	string filename = INTERACTION_TYPES[type] + "_" + numstr + ".avi";
+	string filepath = path + PATH_SEPARATOR + dirname + PATH_SEPARATOR + filename;
+
+	return filepath;
 }
 
 /*****************************************/
@@ -92,28 +93,16 @@ string createPath(const string& path, int type, int num)
 /************* SAVE / LOAD ***************/
 /*****************************************/
 
-//bool persistClassifier(const Classifier& c, const string& filepath) {
-//    string p = filepath + PATH_SEPARATOR + "svm.xml";
-//    c.svm->save(p.c_str());
-//    return true;
-//}
-//
-//Classifier loadClassifier(const string& path, const string& filepath) {
-//    Classifier c;
-//    c.svm = unique_ptr<CvSVM>(new CvSVM());
-//    string p = filepath + PATH_SEPARATOR + "svm.xml";
-//    c.svm->load(p.c_str());
-//    return c;
-//}
 
 /*****************************************/
 /************** PROCESSING ***************/
 /*****************************************/
 
-void processVideo(const string& filepath, const function<void (const Mat&)>& f)
+void processVideo(const string& filepath, const function<void(const Mat&)>& f)
 {
     cout << "Processing " << filepath << endl;
 
+	Size TARGET_SIZE(320, 240);
     VideoCapture video;
     video.open(filepath);
     if (!video.isOpened()) {
@@ -150,51 +139,53 @@ void processVideo(const string& filepath, const function<void (const Mat&)>& f)
 
 void train(const Mat& data, const Mat& labels)
 {
-    CvSVMParams params;
-    params.svm_type    = SVM::C_SVC;
-    params.C           = 312.5;
-    params.kernel_type = SVM::RBF;
-    params.gamma       = 0.50625;
-    params.term_crit   = TermCriteria(CV_TERMCRIT_ITER, 100, 0.000001);
+	CvSVMParams params;
+	params.svm_type = SVM::C_SVC;
+	params.C = 312.5;
+	params.kernel_type = SVM::RBF;
+	params.gamma = 0.50625;
+	params.term_crit = TermCriteria(CV_TERMCRIT_ITER, 100, 0.000001);
 
-    svm.train(data, labels, Mat(), Mat(), params);
+	svm.train(data, labels, Mat(), Mat(), params);
+	svm.save(SVM_PATH);
 }
 
 int classify(const string& filepath)
 {
-    map<int, int> classVoting;
-    
-    function<void (const Mat&)> f = [&classVoting](const Mat& frame)
-    {
-        vector<KeyPoint> keypoints;
-        siftDetector->detect(frame, keypoints);
-        Mat bowDescriptor;
-        bowDE.compute(frame, keypoints, bowDescriptor);
-        
-        if (!bowDescriptor.empty())
-        {
-            float l = svm.predict(bowDescriptor);
-            classVoting[(int)l]++;
-        }
-    };
-    processVideo(filepath, f);
-    
-    int maxValue = 0;
-    int maxLabel = 0;
-    for (auto it = classVoting.begin(); it != classVoting.end(); it++) {
-        if (it->second > maxValue) {
-            maxLabel = it->first;
-            maxValue = it->second;
-        }
-        cout << "Label " << it->first << " has " << it->second << " votes." << endl;
-    }
-    return maxLabel;
+	map<int, int> classVoting;
+
+	function<void(const Mat&)> f = [&classVoting](const Mat& frame)
+	{
+		vector<KeyPoint> keypoints;
+		siftDetector->detect(frame, keypoints);
+		Mat bowDescriptor;
+		bowDE.compute(frame, keypoints, bowDescriptor);
+
+		if (!bowDescriptor.empty())
+		{
+			float l = svm.predict(bowDescriptor);
+			classVoting[(int)l]++;
+		}
+	};
+	processVideo(filepath, f);
+
+	int maxValue = 0;
+	int maxLabel = 0;
+	for (auto it = classVoting.begin(); it != classVoting.end(); it++) {
+		if (it->second > maxValue) {
+			maxLabel = it->first;
+			maxValue = it->second;
+		}
+		cout << "Label " << it->first << " has " << maxValue << " votes." << endl;
+	}
+	return maxLabel;
 }
 
 mutex training_mutex;
 
 void collectTrainData(const string& path, int i, Mat* trainingData, Mat* trainingLabels)
 {
+
     for (int j = 0; j < 45-NUM_CROSS_VALID_LEAVE_OUT; j++)
     {
         string filepath = createPath(path, i, j);
@@ -249,17 +240,17 @@ float performCrossValidation(string path)
 
 void collectCentroidsForVideo(string filepath)
 {
-    function<void (const Mat&)> f = [](const Mat& frame)
-    {
-        vector<KeyPoint> keypoints;
-        siftDetector->detect(frame, keypoints);
-        Mat descriptors;
-        siftExtractor->compute(frame, keypoints, descriptors);
-        if (!descriptors.empty()) {
-            bowTrainer.add(descriptors);
-        }
-    };
-    processVideo(filepath, f);
+	function<void(const Mat&)> f = [](const Mat& frame)
+	{
+		vector<KeyPoint> keypoints;
+		siftDetector->detect(frame, keypoints);
+		Mat descriptors;
+		siftExtractor->compute(frame, keypoints, descriptors);
+		if (!descriptors.empty()) {
+			bowTrainer.add(descriptors);
+		}
+	};
+	processVideo(filepath, f);
 }
 
 void collectCentroids(string path)
@@ -277,21 +268,56 @@ void collectCentroids(string path)
     Mat dictionary = bowTrainer.cluster();
     cout << "Finished clustering ..." << endl;
     bowDE.setVocabulary(dictionary);
+	cv::FileStorage file(DICT_PATH, cv::FileStorage::WRITE);
+	file << dictionary;
 }
 
+String writeResult(string filename, int label)
+{
+	String line = filename + '\t' + getTextForEnum(label) + '\n';
+	return line;
+}
+
+void evaluateTestSet(){
+	ofstream myfile;
+	String filepath = TEST_PATH;
+	myfile.open("result.txt");
+	for (int i = 1; i < 30; i++)
+	{
+		ostringstream ss;
+		ss << setw(3) << setfill('0') << i;
+		string str_i(ss.str());
+		filepath = TEST_PATH + String(PATH_SEPARATOR) +  str_i + ".avi";
+		if (FILE *file = fopen(filepath.c_str(), "r")) {
+			int l = classify(filepath);
+			String res = writeResult(filepath, l);
+			myfile << res;
+		}
+		else
+		{
+			break;
+		}
+	}
+	myfile.close();
+}
 int main(int argc, char** argv)
 {
-    cv::initModule_nonfree();
-    cv::initModule_features2d();
-    cv::initModule_ml();
-    
-    collectCentroids(argv[1]);
-    performCrossValidation(argv[1]);
+	cv::initModule_nonfree();
+	cv::initModule_features2d();
+	cv::initModule_ml();
 
-	return -1;
+	if (TRAIN_MODE)
+	{
+		collectCentroids(argv[1]);
+
+		performCrossValidation(argv[1]);
+	}
+	else{
+		svm.load(SVM_PATH);
+		evaluateTestSet();
+	}
+	waitKey();
 }
-
-
 
 
 
