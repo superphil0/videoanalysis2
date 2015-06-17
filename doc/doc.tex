@@ -15,7 +15,8 @@ Marko Mlinaric, 0825603}
 \maketitle
 
 \section{Overview}
-
+For exercise 2, a trainingsset with video scenes of 4 classes was provided. In the sequences different types of human interactions could be seen, either kissing, hugging, handshaking or highfiveing. The task was to build a classifier with the help of feature extraction and machine learning to classify new videos according to the four classes.
+\par For this we used a bag of words (BOW) approach. First, for only a low amount of the videos, only  every TODO insert i-th frame is analyzed. SIFT descriptors for the frame are found and stored. Next a k means clustering is performed with a k of 1000, this is the size of our dictionary. Next the BOW descriptors are extracted from each video frame. These descriptors are then used to train a support vector machine (SVM) for the later classification.
 
 \section{Training}
 
