@@ -27,8 +27,6 @@ using namespace cv;
 /*********** GLOBAL VARIABLES ************/
 /*****************************************/
 
-int DIC_SIZE = 1000;
-static const string INTERACTION_TYPES[4] = { "Kiss", "HandShake", "HighFive", "Hug" };
 
 Ptr<FeatureDetector> siftDetector = FeatureDetector::create("SIFT");
 Ptr<DescriptorExtractor> siftExtractor = DescriptorExtractor::create("SIFT");
@@ -72,7 +70,7 @@ void printMat(cv::Mat mat)
 
 string createPath(const string& path, int type, int num)
 {
-	string dirname = to_string(type + 1) + "_" + INTERACTION_TYPES[type];
+	string dirname = to_string(type + 1) + "_" + getTextForEnum(type);
 
 	stringstream ss;
 	ss << setw(3) << setfill('0') << num + 1;
@@ -102,34 +100,37 @@ string createPath(const string& path, int type, int num)
 
 void processVideo(const string& filepath, const function<void(const Mat&)>& f)
 {
-	cout << "Processing " << filepath << endl;
+    cout << "Processing " << filepath << endl;
 
-	Size targetSize(320, 240);
-	VideoCapture video;
-	video.open(filepath);
-	if (!video.isOpened()) {
-		throw "Video not opened!";
-	}
-
-	Mat frame;
-	Mat features;
-
-	int framecounter = 0;
-	int fps = video.get(CV_CAP_PROP_FPS);
-	for (int i = 0; i < 5 * fps; i = i + (fps*0.25))
-	{
-		video.set(CV_CAP_PROP_POS_FRAMES, i);
-		video >> frame;
-		if (frame.empty()) {
-			break;
-		}
-		resize(frame, frame, targetSize);
-		cvtColor(frame, frame, CV_BGR2GRAY);
-
-		f(frame);
-		framecounter++;
-	}
-	//cout << framecounter << endl;
+	Size TARGET_SIZE(320, 240);
+    VideoCapture video;
+    video.open(filepath);
+    if (!video.isOpened()) {
+        throw "Video not opened!";
+    }
+    
+    Mat frame;
+    Mat features;
+    
+    int framecounter = 0;
+    int fps = video.get(CV_CAP_PROP_FPS);
+    for(int i = 0;
+        i < ((float)FEATURE_MAX_FRAMES/(float)FEATURE_FRAMES_PER_SECOND)*fps;
+        i = i+(fps*(1.0f/(float)FEATURE_FRAMES_PER_SECOND))
+    )
+    {
+        video.set(CV_CAP_PROP_POS_FRAMES, i);
+        video >> frame;
+        if (frame.empty()) {
+            break;
+        }
+        resize(frame, frame, TARGET_SIZE);
+        cvtColor(frame, frame, CV_BGR2GRAY);
+        
+        f(frame);
+        framecounter++;
+    }
+    //cout << framecounter << endl;
 }
 
 /*****************************************/
@@ -182,58 +183,59 @@ int classify(const string& filepath)
 
 mutex training_mutex;
 
-void collectTrainData(const string& path, int i, int numLeaveOut, Mat* trainingData, Mat* trainingLabels)
+void collectTrainData(const string& path, int i, Mat* trainingData, Mat* trainingLabels)
 {
-	for (int j = 0; j < 44; j++)
-	{
-		string filepath = createPath(path, i, j);
 
-		function<void(const Mat&)> f = [&i, &trainingData, &trainingLabels](const Mat& frame) {
-			vector<KeyPoint> keypoints;
-			siftDetector->detect(frame, keypoints);
-			Mat bowDescriptor;
-			bowDE.compute(frame, keypoints, bowDescriptor);
-
-			if (!bowDescriptor.empty()) {
-				training_mutex.lock();
-				trainingLabels->push_back((float)i);
-				trainingData->push_back(bowDescriptor);
-				training_mutex.unlock();
-			}
-		};
-		processVideo(filepath, f);
-	}
+    for (int j = 0; j < 45-NUM_CROSS_VALID_LEAVE_OUT; j++)
+    {
+        string filepath = createPath(path, i, j);
+        
+        function<void (const Mat&)> f = [&i, &trainingData, &trainingLabels](const Mat& frame) {
+            vector<KeyPoint> keypoints;
+            siftDetector->detect(frame, keypoints);
+            Mat bowDescriptor;
+            bowDE.compute(frame, keypoints, bowDescriptor);
+            
+            if (!bowDescriptor.empty()) {
+                training_mutex.lock();
+                trainingLabels->push_back((float)i);
+                trainingData->push_back(bowDescriptor);
+                training_mutex.unlock();
+            }
+        };
+        processVideo(filepath, f);
+    }
 }
 
-float performCrossValidation(string path, int numLeaveOut)
+float performCrossValidation(string path)
 {
-	Mat trainingData(0, DIC_SIZE, CV_32FC1);
-	Mat trainingLabels(0, 1, CV_32FC1);
+    Mat trainingData(0, DIC_SIZE, CV_32FC1);
+    Mat trainingLabels(0, 1, CV_32FC1);
 
-	vector<thread> ts;
-	for (int i = 0; i < 4; i++)
-		ts.push_back(thread(collectTrainData, path, i, numLeaveOut, &trainingData, &trainingLabels));
-
-	for (auto &t : ts)
-		t.join();
-
-	train(trainingData, trainingLabels);
-
-	int correct_guesses = 0;
-
-	for (int i = 0; i < 4; i++)
-		for (int j = 45 - numLeaveOut; j < 45; j++)
-		{
-			string filepath = createPath(path, i, j);
-
-			int l = classify(filepath);
-			if (l == i) {
-				correct_guesses++;
-			}
-		}
-	cout << "Precision: " << (float)correct_guesses / numLeaveOut / 4 << endl;
-
-	return -1;
+    vector<thread> ts;
+    for (int i = 0; i < 4; i++)
+        ts.push_back(thread(collectTrainData, path, i, &trainingData, &trainingLabels));
+    
+    for (auto &t : ts)
+        t.join();
+    
+    train(trainingData, trainingLabels);
+    
+    int correct_guesses = 0;
+    
+    for (int i = 0; i < 4; i++)
+        for (int j = 45-NUM_CROSS_VALID_LEAVE_OUT; j < 45; j++)
+        {
+            string filepath = createPath(path, i, j);
+            
+            int l = classify(filepath);
+            if (l == i) {
+                correct_guesses++;
+            }
+        }
+    cout << "Precision: " << (float)correct_guesses/NUM_CROSS_VALID_LEAVE_OUT/4 << endl;
+    
+    return -1;
 }
 
 void collectCentroidsForVideo(string filepath)
@@ -253,21 +255,21 @@ void collectCentroidsForVideo(string filepath)
 
 void collectCentroids(string path)
 {
-	for (int i = 0; i < 4; i++)
-		for (int j = 0; j < 1; j++)
-		{
-			string filepath = createPath(path, i, j);
-			collectCentroidsForVideo(filepath);
-		}
-
-	vector<Mat> descriptors = bowTrainer.getDescriptors();
-
-	cout << "Start clustering ..." << endl;
-	Mat dictionary = bowTrainer.cluster();
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < NUM_CLUSTER_VIDEOS; j++)
+        {
+            string filepath = createPath(path, i, j);
+            collectCentroidsForVideo(filepath);
+        }
+    
+    vector<Mat> descriptors = bowTrainer.getDescriptors();
+    
+    cout << "Start clustering ..." << endl;
+    Mat dictionary = bowTrainer.cluster();
+    cout << "Finished clustering ..." << endl;
+    bowDE.setVocabulary(dictionary);
 	cv::FileStorage file(DICT_PATH, cv::FileStorage::WRITE);
 	file << dictionary;
-	cout << "Finished clustering ..." << endl;
-	bowDE.setVocabulary(dictionary);
 }
 
 String writeResult(string filename, int label)
@@ -308,7 +310,7 @@ int main(int argc, char** argv)
 	{
 		collectCentroids(argv[1]);
 
-		performCrossValidation(argv[1], 40);
+		performCrossValidation(argv[1]);
 	}
 	else{
 		svm.load(SVM_PATH);
