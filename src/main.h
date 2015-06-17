@@ -3,7 +3,7 @@
 #else 
 #define PATH_SEPARATOR "/" 
 #endif
-#define TRAIN_MODE 1
+#define TRAIN_MODE 0
 #define SVM_PATH "svm.xml"
 #define DICT_PATH "dictionary.xml"
 #include <string>

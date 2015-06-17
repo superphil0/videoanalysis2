@@ -271,7 +271,7 @@ void evaluateTestSet(){
 	ofstream myfile;
 	String filepath = TEST_PATH;
 	myfile.open("result.txt");
-	for (int i = 1; i < 30; i++)
+	for (int i = 1; i < 2000; i++)
 	{
 		ostringstream ss;
 		ss << setw(3) << setfill('0') << i;
@@ -280,6 +280,7 @@ void evaluateTestSet(){
 		if (FILE *file = fopen(filepath.c_str(), "r")) {
 			int l = classify(filepath);
 			String res = writeResult(filepath, l);
+			cout << "Result: " << getTextForEnum(l) << endl;
 			myfile << res;
 		}
 		else
@@ -302,6 +303,7 @@ int main(int argc, char** argv)
 	}
 	else{
 		svm.load(SVM_PATH);
+		cout << "loaded svm" << endl;
 		evaluateTestSet();
 	}
 	waitKey();
