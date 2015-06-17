@@ -20,13 +20,19 @@ For exercise 2, a trainings set with video scenes of 4 classes was provided.
 In the sequences different types of human interactions could be seen, either kissing, hugging, handshaking or high-five-ing. 
 The task was to build a classifier with the help of feature extraction and machine learning to classify new videos according to the four classes.
 
-For this we used a bag of words (BOW) approach. 
+For this we used a bag of words (BOW) \cite{csurka2004visual} approach based on a low level feature descriptor, similar to \cite{tamrakar2012evaluation}. As a starting point we used a tutorial provided by the University of Chicago \footnote{\url{http://ttic.uchicago.edu/~mostajabi/Tutorial.html }}.
 First, for only a low amount of the videos every n-th frame is analyzed ($n = FPS/4$). 
-SIFT descriptors for the frame are found and stored. 
+SIFT \cite{lowe2004distinctive} descriptors for the frame are found and stored. 
 Next a k-means-clustering is performed with a $k$ of $500$, this is the size of our dictionary. 
 Next the BOW descriptors are extracted from each video frame. 
 These descriptors are then used to train a support vector machine (SVM) for the later classification.
-
+An overview over the pipeline can be seen in Table \ref{fig:grafik}.
+\begin{figure}[h]
+	\centering
+	\includegraphics[width = \textwidth]{grafik.png}
+	\caption{The processing pipeline of of our approach}
+	\label{fig:grafik}
+\end{figure}
 \section{Training}	
 
 

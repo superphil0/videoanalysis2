@@ -28,8 +28,8 @@ using namespace cv;
 /*****************************************/
 
 
-Ptr<FeatureDetector> siftDetector = FeatureDetector::create("SIFT");
-Ptr<DescriptorExtractor> siftExtractor = DescriptorExtractor::create("SIFT");
+Ptr<FeatureDetector> siftDetector = FeatureDetector::create("SURF");
+Ptr<DescriptorExtractor> siftExtractor = DescriptorExtractor::create("SURF");
 Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("FlannBased");
 BOWKMeansTrainer bowTrainer(DIC_SIZE, TermCriteria(CV_TERMCRIT_ITER, 100, 0.001), 1, KMEANS_PP_CENTERS);
 BOWImgDescriptorExtractor bowDE(siftExtractor, matcher);
@@ -324,7 +324,6 @@ int main(int argc, char** argv)
 		cout << "loaded dict and svm" << endl;
 		evaluateTestSet();
 	}
-	waitKey();
 }
 
 
