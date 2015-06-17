@@ -98,7 +98,8 @@ string createPath(const string& path, int type, int num)
 /************** PROCESSING ***************/
 /*****************************************/
 
-void processVideo(const string& filepath, const function<void(const Mat&)>& f)
+void processVideo(const string& filepath, const function<void(const Mat&)>& f,
+        int featurefps = FEATURE_FRAMES_PER_SECOND)
 {
     cout << "Processing " << filepath << endl;
 
@@ -114,12 +115,9 @@ void processVideo(const string& filepath, const function<void(const Mat&)>& f)
     
     int framecounter = 0;
     int fps = video.get(CV_CAP_PROP_FPS);
-    for(int i = 0;
-        i < ((float)FEATURE_MAX_FRAMES/(float)FEATURE_FRAMES_PER_SECOND)*fps;
-        i = i+(fps*(1.0f/(float)FEATURE_FRAMES_PER_SECOND))
-    )
+    for(int i = 0; i < FEATURE_MAX_FRAMES; i++)
     {
-        video.set(CV_CAP_PROP_POS_FRAMES, i);
+        video.set(CV_CAP_PROP_POS_FRAMES, i*(float)fps/(float)featurefps);
         video >> frame;
         if (frame.empty()) {
             break;
@@ -141,12 +139,12 @@ void train(const Mat& data, const Mat& labels)
 {
 	CvSVMParams params;
 	params.svm_type = SVM::C_SVC;
-	params.C = 312.5;
+	//params.C = 312.5;
 	params.kernel_type = SVM::RBF;
-	params.gamma = 0.50625;
+	//params.gamma = 0.50625;
 	params.term_crit = TermCriteria(CV_TERMCRIT_ITER, 100, 0.000001);
 
-	svm.train(data, labels, Mat(), Mat(), params);
+	svm.train_auto(data, labels, Mat(), Mat(), params);
 	svm.save(SVM_PATH);
 }
 
@@ -219,7 +217,9 @@ float performCrossValidation(string path)
     for (auto &t : ts)
         t.join();
     
+    cout << "Start training SVM" << endl;
     train(trainingData, trainingLabels);
+    cout << "Finished training SVM" << endl;
     
     int correct_guesses = 0;
     
