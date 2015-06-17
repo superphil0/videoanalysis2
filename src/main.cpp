@@ -35,6 +35,7 @@ BOWKMeansTrainer bowTrainer(DIC_SIZE, TermCriteria(CV_TERMCRIT_ITER, 100, 0.001)
 BOWImgDescriptorExtractor bowDE(siftExtractor, matcher);
 CvSVM svm;
 
+Mat dictionary;
 /*****************************************/
 /*************** UTILITIES ***************/
 /*****************************************/
@@ -265,7 +266,7 @@ void collectCentroids(string path)
     vector<Mat> descriptors = bowTrainer.getDescriptors();
     
     cout << "Start clustering ..." << endl;
-    Mat dictionary = bowTrainer.cluster();
+    dictionary = bowTrainer.cluster();
     cout << "Finished clustering ..." << endl;
     bowDE.setVocabulary(dictionary);
     
@@ -284,7 +285,7 @@ void evaluateTestSet(){
 	ofstream myfile;
 	String filepath = TEST_PATH;
 	myfile.open("result.txt");
-	for (int i = 1; i < 30; i++)
+	for (int i = 1; i < 2000; i++)
 	{
 		ostringstream ss;
 		ss << setw(3) << setfill('0') << i;
@@ -293,6 +294,7 @@ void evaluateTestSet(){
 		if (FILE *file = fopen(filepath.c_str(), "r")) {
 			int l = classify(filepath);
 			String res = writeResult(filepath, l);
+			cout << "Result: " << getTextForEnum(l) << endl;
 			myfile << res;
 		}
 		else
@@ -315,6 +317,11 @@ int main(int argc, char** argv)
 	}
 	else{
 		svm.load(SVM_PATH);
+		FileStorage fs(DICT_PATH, FileStorage::READ);
+		fs["vocabulary"] >> dictionary;
+		fs.release();
+		bowDE.setVocabulary(dictionary);
+		cout << "loaded dict and svm" << endl;
 		evaluateTestSet();
 	}
 	waitKey();
