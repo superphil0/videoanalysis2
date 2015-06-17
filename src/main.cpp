@@ -233,7 +233,7 @@ float performCrossValidation(string path)
     int correct_guesses = 0;
     
     for (int i = 0; i < 4; i++)
-        for (int j = 45-NUM_CROSS_VALID_LEAVE_OUT; j < 45; j++)
+        for (int j =  0 /*45-NUM_CROSS_VALID_LEAVE_OUT*/; j < 45; j++)
         {
             string filepath = createPath(path, i, j);
             
@@ -242,7 +242,7 @@ float performCrossValidation(string path)
                 correct_guesses++;
             }
         }
-    cout << "Precision: " << (float)correct_guesses/NUM_CROSS_VALID_LEAVE_OUT/4 << endl;
+    cout << "Precision: " << (float)correct_guesses/ /*NUM_CROSS_VALID_LEAVE_OUT*/ (float)45 / (float)4 << endl;
     
     return -1;
 }
