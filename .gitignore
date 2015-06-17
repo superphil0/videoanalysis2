@@ -26,3 +26,9 @@
 *.exe
 *.out
 *.app
+doc/doc.aux
+doc/doc.bbl
+doc/doc.blg
+doc/doc.log
+doc/doc.pdf
+doc/doc.synctex.gz
